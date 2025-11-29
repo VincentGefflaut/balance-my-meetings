@@ -1,0 +1,20 @@
+name: balance-my-meetings
+channels:
+  - defaults
+dependencies:
+  - python=3.9
+  - ffmpeg
+  - pip
+  - pip:
+      - dotenv
+      - pulsectl
+      - pyannote-audio
+      - requests
+      - sounddevice
+      - numpy
+      - scipy
+      - moviepy
+      - flask
+      - pydub
+      - librosa
+      - scipy
