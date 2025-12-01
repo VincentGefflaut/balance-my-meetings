@@ -119,12 +119,15 @@ def upload_audio_to_pyannote(audio_data):
     return object_key
 
 
-def start_diarization_job(object_key, webhook_url=None):
+def start_diarization_job(object_key, webhook_url=None, num_speakers=None):
     """Start diarization job on Pyannote API."""
     payload = {'url': f'media://{object_key}'}
 
     if webhook_url:
         payload['webhook'] = webhook_url
+
+    if num_speakers is not None:
+        payload['numSpeakers'] = num_speakers
 
     response = requests.post(
         'https://api.pyannote.ai/v1/diarize',
@@ -217,6 +220,10 @@ def add_audio():
 def diarize():
     """Process accumulated audio and run diarization."""
     try:
+        # Get numSpeakers from request
+        request_data = request.get_json() or {}
+        num_speakers = request_data.get('numSpeakers')
+
         with audio_lock:
             if not audio_buffer:
                 return jsonify({
@@ -231,7 +238,7 @@ def diarize():
         object_key = upload_audio_to_pyannote(full_audio)
 
         # Start diarization job
-        job_data = start_diarization_job(object_key)
+        job_data = start_diarization_job(object_key, num_speakers=num_speakers)
         job_id = job_data['jobId']
 
         # Poll for results in background thread

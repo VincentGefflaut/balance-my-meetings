@@ -19,9 +19,18 @@
       <button id="resetBtn" class="btn btn-secondary">Reset</button>
 
       <div class="settings">
+        <label for="numSpeakersInput">Number of Speakers:</label>
+        <input type="number" id="numSpeakersInput" min="1" max="10" value="2" />
+      </div>
+
+      <div class="settings">
         <label for="periodInput">Update Period (seconds):</label>
         <input type="number" id="periodInput" min="5" max="60" value="15" />
       </div>
+
+      <button id="everybodyTalkedBtn" class="btn btn-success" disabled>
+        ✓ Everybody Talked
+      </button>
 
       <div class="status">
         <span id="statusText">Ready</span>

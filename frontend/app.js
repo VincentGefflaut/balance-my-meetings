@@ -2,6 +2,7 @@ const API_BASE = 'http://localhost:3000/api';
 
 // State
 let isRecording = false;
+let isDiarizationActive = false;
 let mediaRecorder = null;
 let audioChunks = [];
 let recordingStartTime = null;
@@ -37,7 +38,9 @@ function getSpeakerColor(speakerId) {
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const resetBtn = document.getElementById('resetBtn');
+const everybodyTalkedBtn = document.getElementById('everybodyTalkedBtn');
 const periodInput = document.getElementById('periodInput');
+const numSpeakersInput = document.getElementById('numSpeakersInput');
 const statusText = document.getElementById('statusText');
 const recordingTime = document.getElementById('recordingTime');
 const speakersChart = document.getElementById('speakersChart');
@@ -52,6 +55,7 @@ const speakerLegend = document.getElementById('speakerLegend');
 startBtn.addEventListener('click', startRecording);
 stopBtn.addEventListener('click', stopRecording);
 resetBtn.addEventListener('click', resetSession);
+everybodyTalkedBtn.addEventListener('click', startDiarization);
 
 // Initialize
 async function startRecording() {
@@ -92,21 +96,21 @@ async function startRecording() {
 
     // Update UI
     isRecording = true;
+    isDiarizationActive = false;
     recordingStartTime = Date.now();
     startBtn.disabled = true;
     stopBtn.disabled = false;
+    everybodyTalkedBtn.disabled = false;
     periodInput.disabled = true;
-    statusText.textContent = 'Recording...';
+    numSpeakersInput.disabled = true;
+    statusText.textContent = 'Recording... (waiting for everyone to talk)';
     statusText.classList.add('recording');
 
     // Start recording time display
     updateRecordingTime();
     recordingTimeInterval = setInterval(updateRecordingTime, 1000);
 
-    // Start periodic diarization
-    const period = parseInt(periodInput.value) * 1000;
-    diarizationInterval = setInterval(triggerDiarization, period);
-
+    // Don't start diarization yet - wait for "Everybody Talked" button
     // Start speaker display updates
     updateInterval = setInterval(updateSpeakerDisplay, 2000);
 
@@ -123,9 +127,12 @@ function stopRecording() {
   }
 
   isRecording = false;
+  isDiarizationActive = false;
   startBtn.disabled = false;
   stopBtn.disabled = true;
+  everybodyTalkedBtn.disabled = true;
   periodInput.disabled = false;
+  numSpeakersInput.disabled = false;
   statusText.textContent = 'Stopped';
   statusText.classList.remove('recording');
 
@@ -140,8 +147,25 @@ function stopRecording() {
     clearInterval(updateInterval);
   }
 
-  // Trigger final diarization
+  // Trigger final diarization if it was active
+  if (isDiarizationActive) {
+    triggerDiarization();
+  }
+}
+
+function startDiarization() {
+  if (!isRecording) return;
+
+  isDiarizationActive = true;
+  everybodyTalkedBtn.disabled = true;
+  statusText.textContent = 'Recording & Analyzing...';
+
+  // Trigger first diarization immediately
   triggerDiarization();
+
+  // Start periodic diarization
+  const period = parseInt(periodInput.value) * 1000;
+  diarizationInterval = setInterval(triggerDiarization, period);
 }
 
 async function resetSession() {
@@ -153,6 +177,11 @@ async function resetSession() {
     await fetch(`${API_BASE}/reset`, {
       method: 'POST'
     });
+
+    // Reset state
+    isDiarizationActive = false;
+    lastSpeakerIds = new Set();
+    lastSpeakerData = null;
 
     // Clear UI
     speakerLegend.innerHTML = '<div class="legend-empty">No speakers detected yet</div>';
@@ -168,8 +197,9 @@ async function resetSession() {
     durationEl.textContent = '0s';
     recordingTime.textContent = '00:00';
     statusText.textContent = 'Ready';
-    lastSpeakerIds = new Set();
-    lastSpeakerData = null;
+    everybodyTalkedBtn.disabled = true;
+    numSpeakersInput.disabled = false;
+    periodInput.disabled = false;
 
   } catch (error) {
     console.error('Error resetting session:', error);
@@ -202,19 +232,29 @@ async function sendAudioChunk(audioBlob) {
 }
 
 async function triggerDiarization() {
+  if (!isDiarizationActive) return;
+
   try {
     statusText.textContent = 'Processing...';
 
+    const numSpeakers = parseInt(numSpeakersInput.value);
+
     const response = await fetch(`${API_BASE}/diarize`, {
-      method: 'POST'
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        numSpeakers: numSpeakers
+      })
     });
 
     const data = await response.json();
 
     if (data.success) {
       console.log('Diarization started:', data.jobId);
-      if (isRecording) {
-        statusText.textContent = 'Recording...';
+      if (isRecording && isDiarizationActive) {
+        statusText.textContent = 'Recording & Analyzing...';
       }
     } else {
       console.log('No audio to process yet');
@@ -222,8 +262,8 @@ async function triggerDiarization() {
 
   } catch (error) {
     console.error('Error triggering diarization:', error);
-    if (isRecording) {
-      statusText.textContent = 'Recording...';
+    if (isRecording && isDiarizationActive) {
+      statusText.textContent = 'Recording & Analyzing...';
     }
   }
 }

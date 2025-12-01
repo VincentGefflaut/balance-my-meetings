@@ -98,6 +98,20 @@ h1 {
   background: #718096;
 }
 
+.btn-success {
+  background: #48bb78;
+  color: white;
+}
+
+.btn-success:hover:not(:disabled) {
+  background: #38a169;
+}
+
+.btn-success:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .settings {
   display: flex;
   align-items: center;
