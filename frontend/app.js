@@ -46,6 +46,7 @@ const speakerCountEl = document.getElementById('speakerCount');
 const durationEl = document.getElementById('duration');
 const timeline = document.getElementById('timeline');
 const timelineLabels = document.getElementById('timelineLabels');
+const speakerLegend = document.getElementById('speakerLegend');
 
 // Event Listeners
 startBtn.addEventListener('click', startRecording);
@@ -154,16 +155,21 @@ async function resetSession() {
     });
 
     // Clear UI
+    speakerLegend.innerHTML = '<div class="legend-empty">No speakers detected yet</div>';
     speakersChart.innerHTML = `
       <div class="empty-state">
         <p>Start recording to see speaker analytics</p>
       </div>
     `;
+    timeline.innerHTML = '<div class="timeline-empty">Timeline will appear once recording starts</div>';
+    timelineLabels.innerHTML = '';
     totalTimeEl.textContent = '0s';
     speakerCountEl.textContent = '0';
     durationEl.textContent = '0s';
     recordingTime.textContent = '00:00';
     statusText.textContent = 'Ready';
+    lastSpeakerIds = new Set();
+    lastSpeakerData = null;
 
   } catch (error) {
     console.error('Error resetting session:', error);
@@ -224,6 +230,7 @@ async function triggerDiarization() {
 
 let lastSpeakerData = null;
 let totalRecordingDuration = 0;
+let lastSpeakerIds = new Set(); // Track which speakers exist
 
 async function updateSpeakerDisplay() {
   try {
@@ -248,6 +255,17 @@ async function updateSpeakerDisplay() {
 
     // Sort by time (descending)
     speakers.sort((a, b) => b.time - a.time);
+
+    // Check if speaker set changed (added/removed)
+    const currentSpeakerIds = new Set(speakers.map(s => s.id));
+    const speakerSetChanged = currentSpeakerIds.size !== lastSpeakerIds.size ||
+      [...currentSpeakerIds].some(id => !lastSpeakerIds.has(id));
+
+    // Update legend only when speakers are added/removed
+    if (speakerSetChanged) {
+      updateLegend(speakers);
+      lastSpeakerIds = currentSpeakerIds;
+    }
 
     // Check if data actually changed
     const currentDataStr = JSON.stringify(speakers);
@@ -326,6 +344,60 @@ async function updateSpeakerDisplay() {
   } catch (error) {
     console.error('Error updating speaker display:', error);
   }
+}
+
+function updateLegend(speakers) {
+  speakerLegend.innerHTML = '';
+
+  if (speakers.length === 0) {
+    speakerLegend.innerHTML = '<div class="legend-empty">No speakers detected yet</div>';
+    return;
+  }
+
+  speakers.forEach(speaker => {
+    const color = getSpeakerColor(speaker.id);
+
+    const item = document.createElement('div');
+    item.className = 'legend-item';
+
+    item.innerHTML = `
+      <div class="legend-color" style="background: ${color};"></div>
+      <div class="legend-name" contenteditable="true" data-speaker-id="${speaker.id}">
+        ${speaker.name}
+      </div>
+    `;
+
+    speakerLegend.appendChild(item);
+  });
+
+  // Add event listeners to editable legend names
+  document.querySelectorAll('.legend-name').forEach(nameEl => {
+    nameEl.addEventListener('blur', async (e) => {
+      const speakerId = e.target.dataset.speakerId;
+      const newName = e.target.textContent.trim();
+
+      if (newName) {
+        await updateSpeakerName(speakerId, newName);
+        // Force update display after name change
+        lastSpeakerData = null;
+      }
+    });
+
+    nameEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        e.target.blur();
+      }
+    });
+
+    nameEl.addEventListener('focus', (e) => {
+      e.target.classList.add('editing');
+    });
+
+    nameEl.addEventListener('blur', (e) => {
+      e.target.classList.remove('editing');
+    });
+  });
 }
 
 async function updateSpeakerName(speakerId, newName) {

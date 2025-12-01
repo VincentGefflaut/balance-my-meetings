@@ -138,6 +138,77 @@ h1 {
   color: #333;
 }
 
+/* Legend Section */
+.legend-container {
+  margin-bottom: 30px;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 10px;
+}
+
+.legend-container h3 {
+  color: #333;
+  margin-bottom: 15px;
+  font-size: 1.2rem;
+}
+
+.speaker-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.legend-empty {
+  color: #a0aec0;
+  font-size: 0.9rem;
+  padding: 10px 0;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 15px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+.legend-item:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.legend-color {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.legend-name {
+  font-weight: 600;
+  color: #333;
+  padding: 5px 8px;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 100px;
+}
+
+.legend-name:hover {
+  border-color: #667eea;
+  background: #f8f9fa;
+}
+
+.legend-name.editing {
+  border-color: #667eea;
+  background: white;
+  outline: none;
+}
+
 .chart-container {
   margin-bottom: 40px;
   min-height: 400px;
