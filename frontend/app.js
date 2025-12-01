@@ -48,9 +48,6 @@ const numSpeakersInput = document.getElementById('numSpeakersInput');
 const statusText = document.getElementById('statusText');
 const recordingTime = document.getElementById('recordingTime');
 const speakersChart = document.getElementById('speakersChart');
-const totalTimeEl = document.getElementById('totalTime');
-const speakerCountEl = document.getElementById('speakerCount');
-const durationEl = document.getElementById('duration');
 const timeline = document.getElementById('timeline');
 const timelineLabels = document.getElementById('timelineLabels');
 const speakerLegend = document.getElementById('speakerLegend');
@@ -250,9 +247,6 @@ async function resetSession() {
     `;
     timeline.innerHTML = '<div class="timeline-empty">Timeline will appear once recording starts</div>';
     timelineLabels.innerHTML = '';
-    totalTimeEl.textContent = '0s';
-    speakerCountEl.textContent = '0';
-    durationEl.textContent = '0s';
     recordingTime.textContent = '00:00';
     statusText.textContent = 'Ready';
     everybodyTalkedBtn.disabled = true;
@@ -373,9 +367,6 @@ async function updateSpeakerDisplay() {
     lastSpeakerData = currentDataStr;
 
     // Update stats
-    totalTimeEl.textContent = formatTime(totalTime);
-    speakerCountEl.textContent = speakers.length;
-
     // Update total recording duration from timeline
     if (timeline && timeline.length > 0) {
       totalRecordingDuration = Math.max(...timeline.map(seg => seg.end));
@@ -392,15 +383,11 @@ async function updateSpeakerDisplay() {
       row.className = 'speaker-row';
 
       row.innerHTML = `
-        <div class="speaker-header">
-          <div class="speaker-name" contenteditable="true" data-speaker-id="${speaker.id}">
-            ${speaker.name}
-          </div>
-          <span class="speaker-time">${formatTime(speaker.time)}</span>
-          <span class="speaker-percentage">(${percentage.toFixed(1)}%)</span>
-        </div>
         <div class="bar-container">
-          <div class="bar" style="width: ${percentage}%; background: ${color};"></div>
+          <div class="bar" style="width: ${percentage}%; background: ${color};">
+            <span class="bar-label">${speaker.name}</span>
+            <span class="bar-time">${formatTime(speaker.time)} (${percentage.toFixed(1)}%)</span>
+          </div>
         </div>
       `;
 
@@ -536,8 +523,6 @@ function updateRecordingTime() {
 
   recordingTime.textContent =
     `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
-
-  durationEl.textContent = formatTime(seconds);
 }
 
 function formatTime(seconds) {
@@ -553,7 +538,6 @@ function formatTime(seconds) {
 function updateTimeline(timelineSegments, speakers) {
   if (!timelineSegments || timelineSegments.length === 0) {
     timeline.innerHTML = '<div class="timeline-empty">Timeline will appear once recording starts</div>';
-    timelineLabels.innerHTML = '';
     return;
   }
 
@@ -585,23 +569,6 @@ function updateTimeline(timelineSegments, speakers) {
     segmentEl.title = `${speakerName}: ${formatTime(segment.start)} - ${formatTime(segment.end)}`;
 
     timeline.appendChild(segmentEl);
-  });
-
-  // Update color legend
-  timelineLabels.innerHTML = '';
-
-  speakers.forEach(speaker => {
-    const color = getSpeakerColor(speaker.id);
-
-    const label = document.createElement('div');
-    label.className = 'timeline-label';
-
-    label.innerHTML = `
-      <div class="timeline-label-color" style="background: ${color};"></div>
-      <div class="timeline-label-name">${speaker.name}</div>
-    `;
-
-    timelineLabels.appendChild(label);
   });
 }
 
