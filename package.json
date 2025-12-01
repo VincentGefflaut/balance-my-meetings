@@ -1,0 +1,19 @@
+{
+  "name": "balance-my-meetings",
+  "version": "1.0.0",
+  "description": "Real-time speaker time tracking for meetings",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "backend": "python backend/server.py",
+    "dev": "concurrently \"npm run backend\" \"npm start\""
+  },
+  "keywords": ["electron", "diarization", "meetings", "speaker-tracking"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "electron": "^28.0.0"
+  }
+}

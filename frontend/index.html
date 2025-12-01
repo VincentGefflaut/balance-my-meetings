@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Balance My Meetings</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>⚖️ Balance My Meetings</h1>
+      <p class="subtitle">Real-time speaker time tracking</p>
+    </header>
+
+    <div class="controls">
+      <button id="startBtn" class="btn btn-primary">Start Recording</button>
+      <button id="stopBtn" class="btn btn-danger" disabled>Stop Recording</button>
+      <button id="resetBtn" class="btn btn-secondary">Reset</button>
+
+      <div class="settings">
+        <label for="periodInput">Update Period (seconds):</label>
+        <input type="number" id="periodInput" min="5" max="60" value="15" />
+      </div>
+
+      <div class="status">
+        <span id="statusText">Ready</span>
+        <span id="recordingTime">00:00</span>
+      </div>
+    </div>
+
+    <div class="chart-container">
+      <div id="speakersChart" class="speakers-chart">
+        <div class="empty-state">
+          <p>Start recording to see speaker analytics</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats">
+      <div class="stat-card">
+        <div class="stat-label">Total Speech Time</div>
+        <div class="stat-value" id="totalTime">0s</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Speakers Detected</div>
+        <div class="stat-value" id="speakerCount">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Recording Duration</div>
+        <div class="stat-value" id="duration">0s</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
