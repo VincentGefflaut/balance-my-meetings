@@ -278,7 +278,7 @@ def webhook_diarization():
 
 @app.route('/api/speakers', methods=['GET'])
 def get_speakers():
-    """Get current speaker times."""
+    """Get current speaker times and timeline segments."""
     speakers = []
 
     for speaker_id, time_value in consistent_speaker_times.items():
@@ -290,9 +290,17 @@ def get_speakers():
 
     total_time = sum(s['time'] for s in speakers)
 
+    # Return timeline segments with consistent speaker labels
+    timeline_segments = [{
+        'speaker': seg['speaker'],
+        'start': seg['start'],
+        'end': seg['end']
+    } for seg in previous_diarization]
+
     return jsonify({
         'speakers': speakers,
-        'totalTime': total_time
+        'totalTime': total_time,
+        'timeline': timeline_segments
     })
 
 

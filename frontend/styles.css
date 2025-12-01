@@ -267,6 +267,84 @@ h1 {
   }
 }
 
+/* Timeline Section */
+.timeline-section {
+  margin-top: 40px;
+  padding-top: 30px;
+  border-top: 2px solid #e2e8f0;
+}
+
+.timeline-section h3 {
+  color: #333;
+  margin-bottom: 20px;
+  font-size: 1.3rem;
+}
+
+.timeline-container {
+  background: #f8f9fa;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 15px;
+}
+
+.timeline {
+  height: 60px;
+  background: #e2e8f0;
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.timeline-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #a0aec0;
+  font-size: 0.9rem;
+}
+
+.timeline-segment {
+  position: absolute;
+  height: 100%;
+  top: 0;
+  transition: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 0.85rem;
+  border-right: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.timeline-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  padding: 10px 0;
+}
+
+.timeline-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.timeline-label-color {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.timeline-label-name {
+  font-weight: 600;
+  color: #333;
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 10px;

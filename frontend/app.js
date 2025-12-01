@@ -9,6 +9,30 @@ let updateInterval = null;
 let diarizationInterval = null;
 let recordingTimeInterval = null;
 
+// Speaker colors - distinctive colors for each speaker
+const SPEAKER_COLORS = [
+  '#667eea', // Purple
+  '#f56565', // Red
+  '#48bb78', // Green
+  '#ed8936', // Orange
+  '#4299e1', // Blue
+  '#9f7aea', // Violet
+  '#ed64a6', // Pink
+  '#38b2ac', // Teal
+  '#ecc94b', // Yellow
+  '#f687b3', // Light Pink
+];
+
+function getSpeakerColor(speakerId) {
+  // Extract number from SPEAKER_XX format
+  const match = speakerId.match(/\d+/);
+  if (match) {
+    const index = parseInt(match[0]);
+    return SPEAKER_COLORS[index % SPEAKER_COLORS.length];
+  }
+  return SPEAKER_COLORS[0];
+}
+
 // DOM Elements
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
@@ -20,6 +44,8 @@ const speakersChart = document.getElementById('speakersChart');
 const totalTimeEl = document.getElementById('totalTime');
 const speakerCountEl = document.getElementById('speakerCount');
 const durationEl = document.getElementById('duration');
+const timeline = document.getElementById('timeline');
+const timelineLabels = document.getElementById('timelineLabels');
 
 // Event Listeners
 startBtn.addEventListener('click', startRecording);
@@ -197,13 +223,14 @@ async function triggerDiarization() {
 }
 
 let lastSpeakerData = null;
+let totalRecordingDuration = 0;
 
 async function updateSpeakerDisplay() {
   try {
     const response = await fetch(`${API_BASE}/speakers`);
     const data = await response.json();
 
-    const { speakers, totalTime } = data;
+    const { speakers, totalTime, timeline } = data;
 
     if (speakers.length === 0) {
       return;
@@ -233,11 +260,17 @@ async function updateSpeakerDisplay() {
     totalTimeEl.textContent = formatTime(totalTime);
     speakerCountEl.textContent = speakers.length;
 
+    // Update total recording duration from timeline
+    if (timeline && timeline.length > 0) {
+      totalRecordingDuration = Math.max(...timeline.map(seg => seg.end));
+    }
+
     // Update chart
     speakersChart.innerHTML = '';
 
     speakers.forEach(speaker => {
       const percentage = totalTime > 0 ? (speaker.time / totalTime * 100) : 0;
+      const color = getSpeakerColor(speaker.id);
 
       const row = document.createElement('div');
       row.className = 'speaker-row';
@@ -251,12 +284,15 @@ async function updateSpeakerDisplay() {
           <span class="speaker-percentage">(${percentage.toFixed(1)}%)</span>
         </div>
         <div class="bar-container">
-          <div class="bar" style="width: ${percentage}%"></div>
+          <div class="bar" style="width: ${percentage}%; background: ${color};"></div>
         </div>
       `;
 
       speakersChart.appendChild(row);
     });
+
+    // Update timeline
+    updateTimeline(timeline, speakers);
 
     // Add event listeners to editable speaker names
     document.querySelectorAll('.speaker-name').forEach(nameEl => {
@@ -335,6 +371,61 @@ function formatTime(seconds) {
     const secs = Math.floor(seconds % 60);
     return `${mins}m ${secs}s`;
   }
+}
+
+function updateTimeline(timelineSegments, speakers) {
+  if (!timelineSegments || timelineSegments.length === 0) {
+    timeline.innerHTML = '<div class="timeline-empty">Timeline will appear once recording starts</div>';
+    timelineLabels.innerHTML = '';
+    return;
+  }
+
+  // Clear timeline
+  timeline.innerHTML = '';
+
+  // Use current recording time as the total duration for the timeline
+  // This ensures the timeline always spans the full width
+  const currentTime = (Date.now() - recordingStartTime) / 1000;
+  const maxTime = currentTime > 0 ? currentTime : (totalRecordingDuration || Math.max(...timelineSegments.map(seg => seg.end)));
+
+  // Create timeline segments
+  timelineSegments.forEach(segment => {
+    const startPercent = (segment.start / maxTime) * 100;
+    const widthPercent = ((segment.end - segment.start) / maxTime) * 100;
+    const color = getSpeakerColor(segment.speaker);
+
+    // Find speaker name
+    const speaker = speakers.find(s => s.id === segment.speaker);
+    const speakerName = speaker ? speaker.name : segment.speaker;
+
+    const segmentEl = document.createElement('div');
+    segmentEl.className = 'timeline-segment';
+    segmentEl.style.left = `${startPercent}%`;
+    segmentEl.style.width = `${widthPercent}%`;
+    segmentEl.style.background = color;
+
+    // Tooltip on hover
+    segmentEl.title = `${speakerName}: ${formatTime(segment.start)} - ${formatTime(segment.end)}`;
+
+    timeline.appendChild(segmentEl);
+  });
+
+  // Update color legend
+  timelineLabels.innerHTML = '';
+
+  speakers.forEach(speaker => {
+    const color = getSpeakerColor(speaker.id);
+
+    const label = document.createElement('div');
+    label.className = 'timeline-label';
+
+    label.innerHTML = `
+      <div class="timeline-label-color" style="background: ${color};"></div>
+      <div class="timeline-label-name">${speaker.name}</div>
+    `;
+
+    timelineLabels.appendChild(label);
+  });
 }
 
 // Check backend health on load
