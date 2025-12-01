@@ -112,6 +112,20 @@ h1 {
   cursor: not-allowed;
 }
 
+.btn-warning {
+  background: #ed8936;
+  color: white;
+}
+
+.btn-warning:hover:not(:disabled) {
+  background: #dd6b20;
+}
+
+.btn-warning:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .settings {
   display: flex;
   align-items: center;

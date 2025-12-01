@@ -2,10 +2,13 @@ const API_BASE = 'http://localhost:3000/api';
 
 // State
 let isRecording = false;
+let isPaused = false;
 let isDiarizationActive = false;
 let mediaRecorder = null;
 let audioChunks = [];
 let recordingStartTime = null;
+let pausedTime = 0; // Accumulated paused time
+let pauseStartTime = null;
 let updateInterval = null;
 let diarizationInterval = null;
 let recordingTimeInterval = null;
@@ -36,6 +39,7 @@ function getSpeakerColor(speakerId) {
 
 // DOM Elements
 const startBtn = document.getElementById('startBtn');
+const pauseBtn = document.getElementById('pauseBtn');
 const stopBtn = document.getElementById('stopBtn');
 const resetBtn = document.getElementById('resetBtn');
 const everybodyTalkedBtn = document.getElementById('everybodyTalkedBtn');
@@ -53,6 +57,7 @@ const speakerLegend = document.getElementById('speakerLegend');
 
 // Event Listeners
 startBtn.addEventListener('click', startRecording);
+pauseBtn.addEventListener('click', togglePause);
 stopBtn.addEventListener('click', stopRecording);
 resetBtn.addEventListener('click', resetSession);
 everybodyTalkedBtn.addEventListener('click', startDiarization);
@@ -96,9 +101,13 @@ async function startRecording() {
 
     // Update UI
     isRecording = true;
+    isPaused = false;
     isDiarizationActive = false;
     recordingStartTime = Date.now();
+    pausedTime = 0;
+    pauseStartTime = null;
     startBtn.disabled = true;
+    pauseBtn.disabled = false;
     stopBtn.disabled = false;
     everybodyTalkedBtn.disabled = false;
     periodInput.disabled = true;
@@ -120,6 +129,52 @@ async function startRecording() {
   }
 }
 
+function togglePause() {
+  if (!isRecording) return;
+
+  if (isPaused) {
+    // Resume
+    mediaRecorder.resume();
+    isPaused = false;
+    pauseBtn.textContent = 'Pause';
+
+    // Add accumulated paused time
+    if (pauseStartTime) {
+      pausedTime += Date.now() - pauseStartTime;
+      pauseStartTime = null;
+    }
+
+    // Resume intervals if diarization is active
+    if (isDiarizationActive) {
+      statusText.textContent = 'Recording & Analyzing...';
+      const period = parseInt(periodInput.value) * 1000;
+      diarizationInterval = setInterval(triggerDiarization, period);
+    } else {
+      statusText.textContent = 'Recording... (waiting for everyone to talk)';
+    }
+    statusText.classList.add('recording');
+
+    updateInterval = setInterval(updateSpeakerDisplay, 2000);
+  } else {
+    // Pause
+    mediaRecorder.pause();
+    isPaused = true;
+    pauseBtn.textContent = 'Resume';
+    pauseStartTime = Date.now();
+
+    statusText.textContent = 'Paused';
+    statusText.classList.remove('recording');
+
+    // Stop intervals
+    if (diarizationInterval) {
+      clearInterval(diarizationInterval);
+    }
+    if (updateInterval) {
+      clearInterval(updateInterval);
+    }
+  }
+}
+
 function stopRecording() {
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
     mediaRecorder.stop();
@@ -127,8 +182,11 @@ function stopRecording() {
   }
 
   isRecording = false;
+  isPaused = false;
   isDiarizationActive = false;
   startBtn.disabled = false;
+  pauseBtn.disabled = true;
+  pauseBtn.textContent = 'Pause';
   stopBtn.disabled = true;
   everybodyTalkedBtn.disabled = true;
   periodInput.disabled = false;
@@ -464,7 +522,14 @@ async function updateSpeakerName(speakerId, newName) {
 function updateRecordingTime() {
   if (!recordingStartTime) return;
 
-  const elapsed = Date.now() - recordingStartTime;
+  // Calculate elapsed time excluding paused time
+  let elapsed = Date.now() - recordingStartTime - pausedTime;
+
+  // If currently paused, also subtract the current pause duration
+  if (isPaused && pauseStartTime) {
+    elapsed -= (Date.now() - pauseStartTime);
+  }
+
   const seconds = Math.floor(elapsed / 1000);
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
