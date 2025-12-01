@@ -20,18 +20,9 @@
       <button id="resetBtn" class="btn btn-secondary">Reset</button>
 
       <div class="settings">
-        <label for="numSpeakersInput">Number of Speakers:</label>
-        <input type="number" id="numSpeakersInput" min="1" max="10" value="2" />
-      </div>
-
-      <div class="settings">
         <label for="periodInput">Update Period (seconds):</label>
         <input type="number" id="periodInput" min="5" max="60" value="15" />
       </div>
-
-      <button id="everybodyTalkedBtn" class="btn btn-success" disabled>
-        ✓ Everybody Talked
-      </button>
 
       <div class="status">
         <span id="statusText">Ready</span>
@@ -43,8 +34,11 @@
       <div class="legend-container">
         <h3>Speakers</h3>
         <div id="speakerLegend" class="speaker-legend">
-          <div class="legend-empty">No speakers detected yet</div>
+          <div class="legend-empty">Click + to add speakers</div>
         </div>
+        <button id="addSpeakerBtn" class="btn btn-primary" style="width: 100%; margin-top: 15px;">
+          + Add Speaker
+        </button>
       </div>
 
       <div class="chart-container">
@@ -64,6 +58,18 @@
         </div>
       </div>
       <div id="timelineLabels" class="timeline-labels"></div>
+    </div>
+  </div>
+
+  <!-- Modal for adding speaker -->
+  <div id="addSpeakerModal" class="modal" style="display: none;">
+    <div class="modal-content">
+      <h3>Add Speaker</h3>
+      <input type="text" id="speakerNameInput" placeholder="Enter speaker name" />
+      <div class="modal-buttons">
+        <button id="confirmAddSpeaker" class="btn btn-primary">Add</button>
+        <button id="cancelAddSpeaker" class="btn btn-secondary">Cancel</button>
+      </div>
     </div>
   </div>
 

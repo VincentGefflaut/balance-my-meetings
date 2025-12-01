@@ -17,82 +17,77 @@ TARGET_FS = 16000
 
 # Global state
 audio_buffer = []
-previous_diarization = []
-speaker_mapping = {}
-consistent_speaker_times = {}
-custom_speaker_names = {}
+current_diarization = []  # Latest diarization result from Pyannote
+manual_speakers = {}  # {speaker_id: {'name': str, 'timecode': float, 'order': int}}
+speaker_counter = 0
 audio_lock = threading.Lock()
 
 
-def calculate_segment_overlap(seg1, seg2):
-    """Calculate overlap duration between two segments."""
-    start = max(seg1['start'], seg2['start'])
-    end = min(seg1['end'], seg2['end'])
-    return max(0, end - start)
-
-
-def find_best_speaker_mapping(new_diarization, prev_diarization):
+def calculate_min_distance_to_speaker(timecode, segments):
     """
-    Find the best mapping from new speaker labels to previous speaker labels
-    by comparing segment overlaps.
+    Calculate minimum distance from a timecode to any segment of a speaker.
+    Returns 0 if timecode falls within a segment.
     """
-    if not prev_diarization:
-        # First iteration - create initial mapping
-        mapping = {}
-        seen_speakers = set()
+    min_distance = float('inf')
 
-        for item in new_diarization:
-            speaker = item['speaker']
-            if speaker not in seen_speakers:
-                mapping[speaker] = f"SPEAKER_{len(mapping):02d}"
-                seen_speakers.add(speaker)
+    for segment in segments:
+        if segment['start'] <= timecode <= segment['end']:
+            return 0  # Perfect match - timecode is within this segment
 
-        return mapping
+        # Calculate distance to segment
+        if timecode < segment['start']:
+            distance = segment['start'] - timecode
+        else:  # timecode > segment['end']
+            distance = timecode - segment['end']
 
-    # Group segments by speaker
-    new_speakers = {}
-    prev_speakers = {}
+        min_distance = min(min_distance, distance)
 
-    for item in new_diarization:
-        speaker = item['speaker']
-        if speaker not in new_speakers:
-            new_speakers[speaker] = []
-        new_speakers[speaker].append(item)
+    return min_distance
 
-    for item in prev_diarization:
-        speaker = item['speaker']
-        if speaker not in prev_speakers:
-            prev_speakers[speaker] = []
-        prev_speakers[speaker].append(item)
 
-    # Calculate overlap scores
-    mapping = {}
-    used_prev_speakers = set()
+def map_pyannote_to_manual_speakers(diarization_segments):
+    """
+    Create one-to-one mapping between Pyannote speakers and manual speaker names.
+    Uses greedy algorithm based on timecode proximity.
+    """
+    if not manual_speakers:
+        return {}
 
-    for new_speaker in new_speakers:
-        best_match = None
-        best_overlap = 0
+    # Group segments by Pyannote speaker
+    pyannote_segments = {}
+    for segment in diarization_segments:
+        speaker = segment['speaker']
+        if speaker not in pyannote_segments:
+            pyannote_segments[speaker] = []
+        pyannote_segments[speaker].append(segment)
 
-        for prev_speaker in prev_speakers:
-            if prev_speaker in used_prev_speakers:
-                continue
+    # Build cost list: (cost, manual_id, pyannote_id)
+    costs = []
+    for manual_id, manual_data in manual_speakers.items():
+        timecode = manual_data['timecode']
+        for pyannote_id, segments in pyannote_segments.items():
+            cost = calculate_min_distance_to_speaker(timecode, segments)
+            costs.append((cost, manual_id, pyannote_id))
 
-            total_overlap = 0
-            for new_seg in new_speakers[new_speaker]:
-                for prev_seg in prev_speakers[prev_speaker]:
-                    total_overlap += calculate_segment_overlap(new_seg, prev_seg)
+    # Sort by cost (ascending) - lowest cost = best match
+    costs.sort()
 
-            if total_overlap > best_overlap:
-                best_overlap = total_overlap
-                best_match = prev_speaker
+    # Greedy one-to-one assignment
+    mapping = {}  # pyannote_id -> manual speaker name
+    used_manual = set()
+    used_pyannote = set()
 
-        if best_match and best_overlap > 0:
-            mapping[new_speaker] = best_match
-            used_prev_speakers.add(best_match)
-        else:
-            # Assign new consistent ID
-            new_id = f"SPEAKER_{len(consistent_speaker_times):02d}"
-            mapping[new_speaker] = new_id
+    for cost, manual_id, pyannote_id in costs:
+        if manual_id not in used_manual and pyannote_id not in used_pyannote:
+            mapping[pyannote_id] = manual_speakers[manual_id]['name']
+            used_manual.add(manual_id)
+            used_pyannote.add(pyannote_id)
+
+            print(f"Matched {manual_speakers[manual_id]['name']} (timecode {manual_speakers[manual_id]['timecode']:.1f}s) -> {pyannote_id} (cost: {cost:.1f}s)")
+
+            # Stop when all speakers are mapped
+            if len(mapping) == len(manual_speakers):
+                break
 
     return mapping
 
@@ -166,33 +161,16 @@ def poll_job_status(job_id, max_attempts=120):
 
 
 def process_diarization_result(new_diarization):
-    """Process diarization results and update speaker times."""
-    global speaker_mapping, consistent_speaker_times, previous_diarization
+    """Process diarization results with one-to-one speaker mapping."""
+    global current_diarization
 
-    # Find speaker mapping
-    speaker_mapping = find_best_speaker_mapping(new_diarization, previous_diarization)
+    # Store the raw diarization result
+    current_diarization = new_diarization
+    print(f"Received diarization with {len(set(seg['speaker'] for seg in new_diarization))} speakers")
 
-    # Recalculate speaking times
-    temp_speaker_times = {}
-    for item in new_diarization:
-        original_speaker = item['speaker']
-        consistent_speaker = speaker_mapping[original_speaker]
-        duration = item['end'] - item['start']
-
-        if consistent_speaker not in temp_speaker_times:
-            temp_speaker_times[consistent_speaker] = 0
-        temp_speaker_times[consistent_speaker] += duration
-
-    consistent_speaker_times = temp_speaker_times
-
-    # Update previous diarization with consistent labels
-    previous_diarization = []
-    for item in new_diarization:
-        mapped_item = item.copy()
-        mapped_item['speaker'] = speaker_mapping[item['speaker']]
-        previous_diarization.append(mapped_item)
-
-    print(f"Updated speaker times: {consistent_speaker_times}")
+    # Map Pyannote speakers to manual names
+    mapping = map_pyannote_to_manual_speakers(new_diarization)
+    print(f"Final mapping: {mapping}")
 
 
 # API Endpoints
@@ -220,9 +198,15 @@ def add_audio():
 def diarize():
     """Process accumulated audio and run diarization."""
     try:
-        # Get numSpeakers from request
-        request_data = request.get_json() or {}
-        num_speakers = request_data.get('numSpeakers')
+        # Use number of manual speakers
+        num_speakers = len(manual_speakers)
+
+        # Skip diarization if no speakers have been added yet
+        if num_speakers == 0:
+            return jsonify({
+                'success': False,
+                'message': 'No speakers added yet. Click + to add speakers.'
+            })
 
         with audio_lock:
             if not audio_buffer:
@@ -234,10 +218,12 @@ def diarize():
             # Concatenate all audio chunks
             full_audio = b''.join(audio_buffer)
 
+        print(f"Starting diarization with numSpeakers={num_speakers}")
+
         # Upload to Pyannote
         object_key = upload_audio_to_pyannote(full_audio)
 
-        # Start diarization job
+        # Start diarization job with specific number of speakers
         job_data = start_diarization_job(object_key, num_speakers=num_speakers)
         job_id = job_data['jobId']
 
@@ -288,27 +274,110 @@ def get_speakers():
     """Get current speaker times and timeline segments."""
     speakers = []
 
-    for speaker_id, time_value in consistent_speaker_times.items():
+    if not current_diarization:
+        # No diarization yet - show manual speakers with 0 time
+        for manual_id, manual_data in manual_speakers.items():
+            speakers.append({
+                'id': manual_id,
+                'name': manual_data['name'],
+                'time': 0
+            })
+
+        return jsonify({
+            'speakers': speakers,
+            'totalTime': 0,
+            'timeline': []
+        })
+
+    # Get the mapping from Pyannote speakers to manual names
+    mapping = map_pyannote_to_manual_speakers(current_diarization)
+
+    # Calculate speaking times for each Pyannote speaker
+    speaker_times = {}
+    for segment in current_diarization:
+        pyannote_id = segment['speaker']
+        duration = segment['end'] - segment['start']
+
+        if pyannote_id not in speaker_times:
+            speaker_times[pyannote_id] = 0
+        speaker_times[pyannote_id] += duration
+
+    # Create speaker list with custom names
+    for pyannote_id, time_value in speaker_times.items():
+        name = mapping.get(pyannote_id, pyannote_id)  # Use mapped name or fallback to SPEAKER_XX
         speakers.append({
-            'id': speaker_id,
-            'name': custom_speaker_names.get(speaker_id, speaker_id),
+            'id': pyannote_id,
+            'name': name,
             'time': time_value
         })
 
+    # Also include manual speakers that haven't been mapped yet (with 0 time)
+    mapped_names = set(mapping.values())
+    for manual_id, manual_data in manual_speakers.items():
+        if manual_data['name'] not in mapped_names:
+            speakers.append({
+                'id': manual_id,
+                'name': manual_data['name'],
+                'time': 0
+            })
+
     total_time = sum(s['time'] for s in speakers)
 
-    # Return timeline segments with consistent speaker labels
-    timeline_segments = [{
-        'speaker': seg['speaker'],
-        'start': seg['start'],
-        'end': seg['end']
-    } for seg in previous_diarization]
+    # Return timeline segments with mapped names
+    timeline_segments = []
+    for seg in current_diarization:
+        pyannote_id = seg['speaker']
+        timeline_segments.append({
+            'speaker': mapping.get(pyannote_id, pyannote_id),  # Use mapped name
+            'start': seg['start'],
+            'end': seg['end']
+        })
 
     return jsonify({
         'speakers': speakers,
         'totalTime': total_time,
         'timeline': timeline_segments
     })
+
+
+@app.route('/api/speakers/add', methods=['POST'])
+def add_speaker():
+    """Add a new manual speaker name with timecode for mapping."""
+    global speaker_counter, manual_speakers
+
+    try:
+        data = request.json
+        name = data.get('name')
+        timecode = data.get('timecode')  # Time in seconds from recording start
+
+        if not name:
+            return jsonify({'error': 'Name is required'}), 400
+        if timecode is None:
+            return jsonify({'error': 'Timecode is required'}), 400
+
+        # Generate manual speaker ID (just for tracking)
+        speaker_id = f"MANUAL_{speaker_counter:02d}"
+        speaker_counter += 1
+
+        # Store manual speaker timecode and name
+        manual_speakers[speaker_id] = {
+            'name': name,
+            'timecode': timecode,
+            'order': len(manual_speakers)
+        }
+
+        print(f"Added manual speaker click: {speaker_id} - {name} at {timecode}s")
+
+        return jsonify({
+            'success': True,
+            'id': speaker_id,
+            'name': name,
+            'timecode': timecode
+        })
+
+    except Exception as e:
+        print(f"Error adding speaker: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/speakers/<speaker_id>/name', methods=['POST'])
@@ -334,16 +403,14 @@ def update_speaker_name(speaker_id):
 @app.route('/api/reset', methods=['POST'])
 def reset():
     """Reset session."""
-    global audio_buffer, previous_diarization, speaker_mapping
-    global consistent_speaker_times, custom_speaker_names
+    global audio_buffer, current_diarization, manual_speakers, speaker_counter
 
     with audio_lock:
         audio_buffer = []
 
-    previous_diarization = []
-    speaker_mapping = {}
-    consistent_speaker_times = {}
-    custom_speaker_names = {}
+    current_diarization = []
+    manual_speakers = {}
+    speaker_counter = 0
 
     return jsonify({'success': True})
 

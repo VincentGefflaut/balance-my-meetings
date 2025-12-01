@@ -27,14 +27,21 @@ const SPEAKER_COLORS = [
   '#f687b3', // Light Pink
 ];
 
-function getSpeakerColor(speakerId) {
-  // Extract number from SPEAKER_XX format
-  const match = speakerId.match(/\d+/);
-  if (match) {
-    const index = parseInt(match[0]);
-    return SPEAKER_COLORS[index % SPEAKER_COLORS.length];
+// Cache for speaker name to color mapping
+let speakerColorMap = {};
+
+function getSpeakerColor(speakerNameOrId) {
+  // If we have a cached color for this name, use it
+  if (speakerColorMap[speakerNameOrId]) {
+    return speakerColorMap[speakerNameOrId];
   }
-  return SPEAKER_COLORS[0];
+
+  // Assign a new color based on current map size
+  const colorIndex = Object.keys(speakerColorMap).length % SPEAKER_COLORS.length;
+  const color = SPEAKER_COLORS[colorIndex];
+  speakerColorMap[speakerNameOrId] = color;
+
+  return color;
 }
 
 // DOM Elements
@@ -42,9 +49,8 @@ const startBtn = document.getElementById('startBtn');
 const pauseBtn = document.getElementById('pauseBtn');
 const stopBtn = document.getElementById('stopBtn');
 const resetBtn = document.getElementById('resetBtn');
-const everybodyTalkedBtn = document.getElementById('everybodyTalkedBtn');
+const addSpeakerBtn = document.getElementById('addSpeakerBtn');
 const periodInput = document.getElementById('periodInput');
-const numSpeakersInput = document.getElementById('numSpeakersInput');
 const statusText = document.getElementById('statusText');
 const recordingTime = document.getElementById('recordingTime');
 const speakersChart = document.getElementById('speakersChart');
@@ -57,7 +63,7 @@ startBtn.addEventListener('click', startRecording);
 pauseBtn.addEventListener('click', togglePause);
 stopBtn.addEventListener('click', stopRecording);
 resetBtn.addEventListener('click', resetSession);
-everybodyTalkedBtn.addEventListener('click', startDiarization);
+addSpeakerBtn.addEventListener('click', addSpeaker);
 
 // Initialize
 async function startRecording() {
@@ -99,26 +105,28 @@ async function startRecording() {
     // Update UI
     isRecording = true;
     isPaused = false;
-    isDiarizationActive = false;
+    isDiarizationActive = true;
     recordingStartTime = Date.now();
     pausedTime = 0;
     pauseStartTime = null;
     startBtn.disabled = true;
     pauseBtn.disabled = false;
     stopBtn.disabled = false;
-    everybodyTalkedBtn.disabled = false;
     periodInput.disabled = true;
-    numSpeakersInput.disabled = true;
-    statusText.textContent = 'Recording... (waiting for everyone to talk)';
+    addSpeakerBtn.disabled = false;
+    statusText.textContent = 'Recording & Analyzing...';
     statusText.classList.add('recording');
 
     // Start recording time display
     updateRecordingTime();
     recordingTimeInterval = setInterval(updateRecordingTime, 1000);
 
-    // Don't start diarization yet - wait for "Everybody Talked" button
     // Start speaker display updates
     updateInterval = setInterval(updateSpeakerDisplay, 2000);
+
+    // Start periodic diarization
+    const period = parseInt(periodInput.value) * 1000;
+    diarizationInterval = setInterval(triggerDiarization, period);
 
   } catch (error) {
     console.error('Error starting recording:', error);
@@ -141,15 +149,11 @@ function togglePause() {
       pauseStartTime = null;
     }
 
-    // Resume intervals if diarization is active
-    if (isDiarizationActive) {
-      statusText.textContent = 'Recording & Analyzing...';
-      const period = parseInt(periodInput.value) * 1000;
-      diarizationInterval = setInterval(triggerDiarization, period);
-    } else {
-      statusText.textContent = 'Recording... (waiting for everyone to talk)';
-    }
+    // Resume intervals
+    statusText.textContent = 'Recording & Analyzing...';
     statusText.classList.add('recording');
+    const period = parseInt(periodInput.value) * 1000;
+    diarizationInterval = setInterval(triggerDiarization, period);
 
     updateInterval = setInterval(updateSpeakerDisplay, 2000);
   } else {
@@ -185,9 +189,8 @@ function stopRecording() {
   pauseBtn.disabled = true;
   pauseBtn.textContent = 'Pause';
   stopBtn.disabled = true;
-  everybodyTalkedBtn.disabled = true;
+  addSpeakerBtn.disabled = true;
   periodInput.disabled = false;
-  numSpeakersInput.disabled = false;
   statusText.textContent = 'Stopped';
   statusText.classList.remove('recording');
 
@@ -202,25 +205,8 @@ function stopRecording() {
     clearInterval(updateInterval);
   }
 
-  // Trigger final diarization if it was active
-  if (isDiarizationActive) {
-    triggerDiarization();
-  }
-}
-
-function startDiarization() {
-  if (!isRecording) return;
-
-  isDiarizationActive = true;
-  everybodyTalkedBtn.disabled = true;
-  statusText.textContent = 'Recording & Analyzing...';
-
-  // Trigger first diarization immediately
+  // Trigger final diarization
   triggerDiarization();
-
-  // Start periodic diarization
-  const period = parseInt(periodInput.value) * 1000;
-  diarizationInterval = setInterval(triggerDiarization, period);
 }
 
 async function resetSession() {
@@ -237,9 +223,10 @@ async function resetSession() {
     isDiarizationActive = false;
     lastSpeakerIds = new Set();
     lastSpeakerData = null;
+    speakerColorMap = {};  // Clear color assignments
 
     // Clear UI
-    speakerLegend.innerHTML = '<div class="legend-empty">No speakers detected yet</div>';
+    speakerLegend.innerHTML = '<div class="legend-empty">Click + to add speakers</div>';
     speakersChart.innerHTML = `
       <div class="empty-state">
         <p>Start recording to see speaker analytics</p>
@@ -249,8 +236,7 @@ async function resetSession() {
     timelineLabels.innerHTML = '';
     recordingTime.textContent = '00:00';
     statusText.textContent = 'Ready';
-    everybodyTalkedBtn.disabled = true;
-    numSpeakersInput.disabled = false;
+    addSpeakerBtn.disabled = false;
     periodInput.disabled = false;
 
   } catch (error) {
@@ -289,16 +275,11 @@ async function triggerDiarization() {
   try {
     statusText.textContent = 'Processing...';
 
-    const numSpeakers = parseInt(numSpeakersInput.value);
-
     const response = await fetch(`${API_BASE}/diarize`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        numSpeakers: numSpeakers
-      })
+      }
     });
 
     const data = await response.json();
@@ -377,14 +358,17 @@ async function updateSpeakerDisplay() {
 
     speakers.forEach(speaker => {
       const percentage = totalTime > 0 ? (speaker.time / totalTime * 100) : 0;
-      const color = getSpeakerColor(speaker.id);
+      const color = getSpeakerColor(speaker.name);  // Use name for consistent colors
 
       const row = document.createElement('div');
       row.className = 'speaker-row';
 
+      // Show at least 15% width for visibility, even if time is 0
+      const displayWidth = Math.max(percentage, 15);
+
       row.innerHTML = `
         <div class="bar-container">
-          <div class="bar" style="width: ${percentage}%; background: ${color};">
+          <div class="bar" style="width: ${displayWidth}%; background: ${color};">
             <span class="bar-label">${speaker.name}</span>
             <span class="bar-time">${formatTime(speaker.time)} (${percentage.toFixed(1)}%)</span>
           </div>
@@ -440,7 +424,7 @@ function updateLegend(speakers) {
   }
 
   speakers.forEach(speaker => {
-    const color = getSpeakerColor(speaker.id);
+    const color = getSpeakerColor(speaker.name);  // Use name for consistent colors
 
     const item = document.createElement('div');
     item.className = 'legend-item';
@@ -553,11 +537,10 @@ function updateTimeline(timelineSegments, speakers) {
   timelineSegments.forEach(segment => {
     const startPercent = (segment.start / maxTime) * 100;
     const widthPercent = ((segment.end - segment.start) / maxTime) * 100;
-    const color = getSpeakerColor(segment.speaker);
 
-    // Find speaker name
-    const speaker = speakers.find(s => s.id === segment.speaker);
-    const speakerName = speaker ? speaker.name : segment.speaker;
+    // segment.speaker is now the mapped name from backend
+    const speakerName = segment.speaker;
+    const color = getSpeakerColor(speakerName);  // Use name for consistent colors
 
     const segmentEl = document.createElement('div');
     segmentEl.className = 'timeline-segment';
@@ -570,6 +553,102 @@ function updateTimeline(timelineSegments, speakers) {
 
     timeline.appendChild(segmentEl);
   });
+}
+
+function addSpeaker() {
+  // Calculate and store timecode NOW (when + button is clicked)
+  let timecode = 0;
+  if (recordingStartTime) {
+    let elapsed = Date.now() - recordingStartTime - pausedTime;
+    if (isPaused && pauseStartTime) {
+      elapsed -= (Date.now() - pauseStartTime);
+    }
+    timecode = elapsed / 1000; // Convert to seconds
+  }
+
+  // Show modal
+  const modal = document.getElementById('addSpeakerModal');
+  const input = document.getElementById('speakerNameInput');
+  const confirmBtn = document.getElementById('confirmAddSpeaker');
+  const cancelBtn = document.getElementById('cancelAddSpeaker');
+
+  modal.style.display = 'flex';
+  input.value = '';
+  input.focus();
+
+  // Handle confirm
+  const handleConfirm = async () => {
+    const name = input.value.trim();
+
+    if (!name) {
+      return;
+    }
+
+    // Hide modal
+    modal.style.display = 'none';
+    cleanup();
+
+    try {
+      // Send to backend with the timecode captured when + was clicked
+      const response = await fetch(`${API_BASE}/speakers/add`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: name,
+          timecode: timecode  // Use the timecode from when + was clicked
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to add speaker');
+      }
+
+      const data = await response.json();
+      console.log('Speaker added:', data);
+
+      // Force update display
+      lastSpeakerData = null;
+      await updateSpeakerDisplay();
+
+      // Trigger diarization to re-assign segments
+      if (isDiarizationActive) {
+        triggerDiarization();
+      }
+
+    } catch (error) {
+      console.error('Error adding speaker:', error);
+      alert('Error adding speaker: ' + error.message);
+    }
+  };
+
+  // Handle cancel
+  const handleCancel = () => {
+    modal.style.display = 'none';
+    cleanup();
+  };
+
+  // Handle Enter key
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      handleConfirm();
+    } else if (e.key === 'Escape') {
+      handleCancel();
+    }
+  };
+
+  // Cleanup function
+  const cleanup = () => {
+    confirmBtn.removeEventListener('click', handleConfirm);
+    cancelBtn.removeEventListener('click', handleCancel);
+    input.removeEventListener('keypress', handleKeyPress);
+  };
+
+  // Add event listeners
+  confirmBtn.addEventListener('click', handleConfirm);
+  cancelBtn.addEventListener('click', handleCancel);
+  input.addEventListener('keypress', handleKeyPress);
 }
 
 // Check backend health on load
