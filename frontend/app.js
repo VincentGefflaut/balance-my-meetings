@@ -50,6 +50,7 @@ const pauseBtn = document.getElementById('pauseBtn');
 const stopBtn = document.getElementById('stopBtn');
 const resetBtn = document.getElementById('resetBtn');
 const addSpeakerBtn = document.getElementById('addSpeakerBtn');
+const audioInputSelect = document.getElementById('audioInputSelect');
 const periodInput = document.getElementById('periodInput');
 const statusText = document.getElementById('statusText');
 const recordingTime = document.getElementById('recordingTime');
@@ -65,17 +66,59 @@ stopBtn.addEventListener('click', stopRecording);
 resetBtn.addEventListener('click', resetSession);
 addSpeakerBtn.addEventListener('click', addSpeaker);
 
+// Populate audio input devices
+async function populateAudioDevices() {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const audioInputs = devices.filter(device => device.kind === 'audioinput');
+
+    // Clear existing options except default
+    audioInputSelect.innerHTML = '<option value="">Default</option>';
+
+    audioInputs.forEach(device => {
+      const option = document.createElement('option');
+      option.value = device.deviceId;
+      option.textContent = device.label || `Microphone ${audioInputSelect.options.length}`;
+      audioInputSelect.appendChild(option);
+    });
+  } catch (error) {
+    console.error('Error enumerating devices:', error);
+  }
+}
+
+// Request permission and populate devices on load
+navigator.mediaDevices.getUserMedia({ audio: true })
+  .then(stream => {
+    // Stop the stream immediately, we just needed permission
+    stream.getTracks().forEach(track => track.stop());
+    return populateAudioDevices();
+  })
+  .catch(error => {
+    console.error('Error requesting microphone permission:', error);
+  });
+
 // Initialize
 async function startRecording() {
   try {
+    // Get selected audio device
+    const selectedDeviceId = audioInputSelect.value;
+
+    // Configure audio constraints
+    const audioConstraints = {
+      channelCount: 1,
+      sampleRate: 16000,
+      echoCancellation: true,
+      noiseSuppression: true
+    };
+
+    // Add device ID if specific device selected
+    if (selectedDeviceId) {
+      audioConstraints.deviceId = { exact: selectedDeviceId };
+    }
+
     // Get microphone access
     const stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        channelCount: 1,
-        sampleRate: 16000,
-        echoCancellation: true,
-        noiseSuppression: true
-      }
+      audio: audioConstraints
     });
 
     // Create MediaRecorder
@@ -112,6 +155,7 @@ async function startRecording() {
     startBtn.disabled = true;
     pauseBtn.disabled = false;
     stopBtn.disabled = false;
+    audioInputSelect.disabled = true;
     periodInput.disabled = true;
     addSpeakerBtn.disabled = false;
     statusText.textContent = 'Recording & Analyzing...';
@@ -190,6 +234,7 @@ function stopRecording() {
   pauseBtn.textContent = 'Pause';
   stopBtn.disabled = true;
   addSpeakerBtn.disabled = true;
+  audioInputSelect.disabled = false;
   periodInput.disabled = false;
   statusText.textContent = 'Stopped';
   statusText.classList.remove('recording');
