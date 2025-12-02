@@ -67,6 +67,7 @@ This starts both the Python backend (port 3000) and Electron frontend.
 
 - **Live diarization**: Pyannote's API being asynchronous for the moment, several approaches including voiceprints were tried and the one implemented here (periodic calls on the full file and name assignation with + button) is the most performant and user-friendly one found
 - **Tokens consumption**: Pyannote minutes consumption of this app evolves with the square of recording length
+- **Latency**: Because at each period the entire audio is uploaded and then diarized, latency between diarization trigger and results display is also an issue
 
 ## Future improvements
 
