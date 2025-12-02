@@ -62,3 +62,13 @@ This starts both the Python backend (port 3000) and Electron frontend.
 - **Frontend**: Electron, Vanilla JS
 - **Backend**: Python, Flask
 - **AI**: Pyannote.ai speaker diarization API
+
+## Challenges
+
+- **Live diarization**: Pyannote's API being asynchronous for the moment, several approaches including voiceprints were tried and the one implemented here (periodic calls on the full file and name assignation with + button) is the most performant and user-friendly one found
+- **Tokens consumption**: Pyannote minutes consumption of this app evolves with the square of recording length
+
+## Future improvements
+
+- **Voiceprints**: handle pre-recorded or automatically recorded voiceprints to keep memory of the speakers and avoid re-diarizing the entire file at each period
+- **Native live handling**: this app must be transitioned to continuous diarization (eg via websocket) once it is available on Pyannote
