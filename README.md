@@ -2,6 +2,8 @@
 
 Real-time speaker time tracking for meetings using AI-powered diarization.
 
+Demo here: https://youtu.be/WNJBKXzXeu4
+
 ## How It Works
 
 **Algorithm:**
